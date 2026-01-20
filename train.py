@@ -1,3 +1,4 @@
+import csv
 import getpass
 import os
 import random
@@ -27,6 +28,19 @@ def cycle(loader):
     while True:
         for batch in loader:
             yield batch
+
+
+def init_csv_logger(log_path):
+    if not log_path:
+        return None, None
+    log_dir = os.path.dirname(log_path)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    log_file = open(log_path, "w", newline="", encoding="utf-8")
+    writer = csv.writer(log_file)
+    writer.writerow(["step", "train_loss", "train_acc", "val_loss", "val_acc"])
+    log_file.flush()
+    return log_file, writer
 
 
 def evaluate(model, loader, device):
@@ -105,35 +119,53 @@ def main():
 
     max_steps = int(config["max_steps"])
     log_every = int(config.get("log_every", 1))
+    log_path = config.get("log_path", "")
+    log_file, log_writer = init_csv_logger(log_path)
     train_iter = cycle(train_loader)
 
-    for step in range(1, max_steps + 1):
-        inputs, targets = next(train_iter)
-        inputs = inputs.to(device)
-        targets = targets.to(device)
+    try:
+        for step in range(1, max_steps + 1):
+            inputs, targets = next(train_iter)
+            inputs = inputs.to(device)
+            targets = targets.to(device)
 
-        logits = model(inputs)[:, -1, :]
-        loss = F.cross_entropy(logits, targets)
+            logits = model(inputs)[:, -1, :]
+            loss = F.cross_entropy(logits, targets)
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        with torch.no_grad():
-            preds = logits.argmax(dim=-1)
-            train_acc = (preds == targets).float().mean().item()
+            with torch.no_grad():
+                preds = logits.argmax(dim=-1)
+                train_acc = (preds == targets).float().mean().item()
 
-        if step % log_every == 0:
-            test_loss, test_acc = evaluate(model, test_loader, device)
-            wandb.log(
-                {
-                    "train/loss": loss.item(),
-                    "train/acc": train_acc,
-                    "test/loss": test_loss,
-                    "test/acc": test_acc,
-                },
-                step=step,
-            )
+            if step % log_every == 0:
+                val_loss, val_acc = evaluate(model, test_loader, device)
+                train_loss = loss.item()
+                wandb.log(
+                    {
+                        "train/loss": train_loss,
+                        "train/acc": train_acc,
+                        "val/loss": val_loss,
+                        "val/acc": val_acc,
+                    },
+                    step=step,
+                )
+                print(
+                    f"step {step} "
+                    f"train_loss={train_loss:.6f} train_acc={train_acc:.4f} "
+                    f"val_loss={val_loss:.6f} val_acc={val_acc:.4f}",
+                    flush=True,
+                )
+                if log_writer:
+                    log_writer.writerow(
+                        [step, train_loss, train_acc, val_loss, val_acc]
+                    )
+                    log_file.flush()
+    finally:
+        if log_file:
+            log_file.close()
 
     save_path = config.get("save_path", "model.pt")
     save_dir = os.path.dirname(save_path)
