@@ -149,6 +149,8 @@ def main():
                         "train/acc": train_acc,
                         "val/loss": val_loss,
                         "val/acc": val_acc,
+                        "test/loss": val_loss,
+                        "test/acc": val_acc,
                     },
                     step=step,
                 )
