@@ -1,3 +1,4 @@
+import getpass
 import os
 import random
 
@@ -55,6 +56,12 @@ def main():
     wandb_api_key = os.environ.get("WANDB_API_KEY")
     if not wandb_project:
         raise RuntimeError("WANDB_PROJECT must be set in the environment.")
+    if not wandb_api_key:
+        wandb_api_key = getpass.getpass(
+            "Enter WANDB API key (leave blank to skip login): "
+        ).strip()
+        if not wandb_api_key:
+            wandb_api_key = None
     if wandb_api_key:
         wandb.login(key=wandb_api_key)
 
