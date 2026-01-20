@@ -6,3 +6,4 @@ wandb
 datasets
 tokenizers
 tqdm
+matplotlib
